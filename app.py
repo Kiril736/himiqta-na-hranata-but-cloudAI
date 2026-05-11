@@ -183,7 +183,12 @@ st.markdown('<p class="section-title">📸 Or take a photo</p>', unsafe_allow_ht
 
 camera_image = st.camera_input("Take a photo of the label", label_visibility="collapsed")
 
-image_source = uploaded_file or camera_image
+if uploaded_file is not None:
+    image_source = uploaded_file
+elif camera_image is not None:
+    image_source = camera_image
+else:
+    image_source = None
 
 # ── Processing ────────────────────────────────────────────────────────────────
 if image_source:
