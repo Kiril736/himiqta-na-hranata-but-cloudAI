@@ -218,7 +218,7 @@ if image_source:
         st.image(
             image,
             caption="Uploaded label",
-            use_container_width=True
+            width="stretch"
         )
 
         with st.spinner("🔍 Scanning label..."):
