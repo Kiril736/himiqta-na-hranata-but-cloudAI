@@ -31,8 +31,30 @@ harmful_e_numbers = {
     "E450": "Diphosphates – may affect kidneys",
     "E621": "MSG – may cause headaches",
     "E952": "Cyclamate – artificial sweetener",
-    "E150d": "Caramel colour - a lot from it can make you pass out",
-    "E330": "sodium - can make your bones softer"
+
+    "E150d": (
+        "Caramel Colour IV – common coloring agent; "
+        "some studies associate large amounts with potential risks"
+    ),
+
+    "E338": (
+        "Phosphoric acid – excessive phosphate intake may negatively "
+        "affect bone density and kidney function"
+    ),
+
+    "High Sugar": (
+        "High sugar content – may increase risk of obesity, "
+        "type 2 diabetes, and dental problems"
+    ),
+
+    "E951": (
+        "Aspartame – artificial sweetener used in diet drinks; "
+        "long-term effects remain debated"
+    ),
+
+    "E950": (
+        "Acesulfame K – artificial sweetener; "
+        "metabolic effects are still being researched"
 }
 
 ingredient_warnings = {
