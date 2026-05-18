@@ -31,6 +31,8 @@ harmful_e_numbers = {
     "E450": "Diphosphates – may affect kidneys",
     "E621": "MSG – may cause headaches",
     "E952": "Cyclamate – artificial sweetener",
+    "E150d": "Caramel colour - a lot from it can make you pass out",
+    "E330": "sodium - can make your bones softer"
 }
 
 ingredient_warnings = {
