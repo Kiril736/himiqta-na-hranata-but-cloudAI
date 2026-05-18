@@ -2,176 +2,51 @@ import streamlit as st
 import easyocr
 import numpy as np
 from PIL import Image
+import re
 
-# ─────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Food Label Analyzer",
     page_icon="🧪",
     layout="centered"
 )
 
-# ─────────────────────────────────────────────────────────────
-# CUSTOM CSS
-# ─────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-
-.stApp {
-    background-color: #f8f9fa;
-}
-
-.block-container {
-    padding-top: 2rem;
-    max-width: 760px;
-}
-
-.hero {
-    background: linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);
-    border-radius: 18px;
-    padding: 2.5rem;
-    color: white;
-    text-align: center;
-    margin-bottom: 2rem;
-}
-
-.hero h1 {
-    margin: 0;
-    font-size: 2.2rem;
-}
-
-.hero p {
-    opacity: 0.85;
-    margin-top: 0.5rem;
-}
-
-.section-title {
-    font-size: 1.05rem;
-    font-weight: 700;
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    color: #1a1a2e;
-}
-
-.result-box {
-    background: white;
-    border-radius: 12px;
-    padding: 1.25rem;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    margin-bottom: 1rem;
-}
-
-.badge-danger {
-    background: #fdecea;
-    color: #c0392b;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-}
-
-.badge-warning {
-    background: #fff3cd;
-    color: #946200;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-}
-
-.badge-success {
-    background: #e9f7ef;
-    color: #1a7a4a;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-}
-
-.alt-item {
-    background: #eefaf2;
-    color: #1a7a4a;
-    padding: 0.7rem;
-    border-radius: 8px;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.footer {
-    text-align: center;
-    color: #aaa;
-    margin-top: 3rem;
-    font-size: 0.85rem;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────
-# HERO
-# ─────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="hero">
-    <h1>🧪 Food Label Analyzer</h1>
-    <p>
-        Upload a food label and detect harmful additives,
-        risky ingredients, and healthier alternatives.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # OCR MODEL (CACHED)
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 @st.cache_resource
 def load_reader():
     return easyocr.Reader(['en', 'bg'], verbose=False)
 
 reader = load_reader()
 
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # DATA
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 harmful_e_numbers = {
-    "E250": "Sodium nitrite – excessive intake may increase health risks",
+    "E250": "Sodium nitrite – may increase health risks",
     "E407": "Carrageenan – possible digestive irritation",
-    "E450": "Diphosphates – excessive use may affect kidneys",
-    "E621": "MSG – may cause headaches in sensitive individuals",
+    "E450": "Diphosphates – may affect kidneys",
+    "E621": "MSG – may cause headaches",
     "E952": "Cyclamate – artificial sweetener",
-    "E471": "Emulsifier",
-    "E472": "Emulsifier",
-    "E330": "Citric acid – may affect tooth enamel",
-    "E300": "Ascorbic acid – large amounts may irritate stomach",
-    "E262": "Sodium acetate"
 }
 
 ingredient_warnings = {
-    "palm oil": "Palm oil is often highly processed",
-    "preservative": "Preservatives may contain nitrates or sulfites",
-    "phosphate": "Phosphates may negatively affect kidneys",
+    "palm oil": "Highly processed fat",
+    "preservative": "May contain nitrates/sulfites",
+    "phosphate": "May affect kidneys",
     "sweetener": "Artificial sweeteners should be limited",
-    "colouring": "Some colorings may trigger allergies",
-    "лактоза": "Лактозата може да причини дискомфорт",
-    "палмово масло": "Палмовото масло е силно преработено",
+    "colouring": "May trigger allergies",
+    "палмово масло": "Силно преработено",
+    "лактоза": "Може да причини дискомфорт",
 }
 
 alternatives = {
-    "sausage": [
-        "Grilled chicken breast",
-        "Home-cooked meat",
-        "Eggs with vegetables"
-    ],
-    "chips": [
-        "Baked potatoes",
-        "Mixed nuts",
-        "Homemade popcorn"
-    ],
-    "soda": [
-        "Sparkling water",
-        "Homemade lemonade",
-        "Unsweetened tea"
-    ]
+    "sausage": ["Grilled chicken", "Eggs", "Home-cooked meat"],
+    "chips": ["Baked potatoes", "Nuts", "Popcorn"],
+    "soda": ["Sparkling water", "Tea", "Homemade lemonade"]
 }
 
 trigger_map = {
@@ -180,244 +55,124 @@ trigger_map = {
     "soda": ["soda", "cola", "газирано"]
 }
 
-# ─────────────────────────────────────────────────────────────
-# FILE INPUT
-# ─────────────────────────────────────────────────────────────
-st.markdown(
-    '<p class="section-title">📂 Upload a label image</p>',
-    unsafe_allow_html=True
-)
+# ─────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────
+def normalize_text(text):
+    text = text.lower()
+    text = text.replace("-", "").replace(",", "")
+    return text
 
-uploaded_file = st.file_uploader(
-    "Upload image",
-    type=["png", "jpg", "jpeg"],
-    label_visibility="collapsed"
-)
+def find_e_numbers(text):
+    pattern = r"\bE[\s-]?\d{3}\b"
+    matches = re.findall(pattern, text.upper())
+    return list(set(m.replace(" ", "").replace("-", "") for m in matches))
 
-st.markdown(
-    '<p class="section-title">📸 Or take a photo</p>',
-    unsafe_allow_html=True
-)
+# ─────────────────────────────────────────────
+# UI
+# ─────────────────────────────────────────────
+st.title("🧪 Food Label Analyzer")
 
-camera_image = st.camera_input(
-    "Take photo",
-    label_visibility="collapsed"
-)
+uploaded_file = st.file_uploader("Upload label", type=["png", "jpg", "jpeg"])
+camera_image = st.camera_input("Or take a photo")
 
-# SELECT IMAGE SOURCE
 image_source = uploaded_file if uploaded_file else camera_image
 
-# ─────────────────────────────────────────────────────────────
-# PROCESS IMAGE
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# PROCESS
+# ─────────────────────────────────────────────
 if image_source:
 
     try:
         image = Image.open(image_source)
+        st.image(image, caption="Label", use_container_width=True)
 
-        st.image(
-            image,
-            caption="Uploaded label",
-            width="stretch"
-        )
-
-        with st.spinner("🔍 Scanning label..."):
-
+        with st.spinner("Scanning..."):
             image_np = np.array(image)
 
-            results = reader.readtext(
-                image_np,
-                detail=0
-            )
+            # get confidence too
+            results = reader.readtext(image_np, detail=1)
 
-            extracted_text = " ".join(results)
+            extracted_text = " ".join([r[1] for r in results])
 
-        text_upper = extracted_text.upper()
-        text_lower = extracted_text.lower()
+        text_clean = normalize_text(extracted_text)
 
-        # ─────────────────────────────────────────
-        # RECOGNIZED TEXT
-        # ─────────────────────────────────────────
-        st.markdown(
-            '<p class="section-title">📄 Recognized Text</p>',
-            unsafe_allow_html=True
-        )
+        # ───────── TEXT
+        st.subheader("📄 Recognized Text")
+        st.text_area("", extracted_text, height=150)
 
-        st.text_area(
-            "",
-            extracted_text,
-            height=180,
-            label_visibility="collapsed"
-        )
+        # ───────── E NUMBERS
+        st.subheader("🚨 Harmful E-Numbers")
 
-        # ─────────────────────────────────────────
-        # E-NUMBERS
-        # ─────────────────────────────────────────
-        st.markdown(
-            '<p class="section-title">🚨 Harmful E-Numbers</p>',
-            unsafe_allow_html=True
-        )
-
+        detected_e = find_e_numbers(extracted_text)
         found_e = []
 
-        for code, desc in harmful_e_numbers.items():
-            if code in text_upper:
-                found_e.append((code, desc))
-
-        st.markdown('<div class="result-box">', unsafe_allow_html=True)
+        for code in detected_e:
+            if code in harmful_e_numbers:
+                found_e.append((code, harmful_e_numbers[code]))
 
         if found_e:
             for code, desc in found_e:
-                st.markdown(
-                    f"""
-                    <p>
-                        <span class="badge-danger">{code}</span>
-                        {desc}
-                    </p>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.error(f"{code} → {desc}")
         else:
-            st.markdown(
-                '<span class="badge-success">✓ No harmful E-numbers detected</span>',
-                unsafe_allow_html=True
-            )
+            st.success("No harmful E-numbers detected")
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ─────────────────────────────────────────
-        # INGREDIENT WARNINGS
-        # ─────────────────────────────────────────
-        st.markdown(
-            '<p class="section-title">⚠️ Ingredient Warnings</p>',
-            unsafe_allow_html=True
-        )
+        # ───────── INGREDIENTS
+        st.subheader("⚠️ Ingredient Warnings")
 
         found_keywords = []
 
         for keyword, warning in ingredient_warnings.items():
-            if keyword in text_lower:
+            if keyword in text_clean:
                 found_keywords.append((keyword, warning))
 
-        st.markdown('<div class="result-box">', unsafe_allow_html=True)
-
         if found_keywords:
-            for keyword, warning in found_keywords:
-                st.markdown(
-                    f"""
-                    <p>
-                        <span class="badge-warning">{keyword}</span>
-                        {warning}
-                    </p>
-                    """,
-                    unsafe_allow_html=True
-                )
+            for keyword, warning in set(found_keywords):
+                st.warning(f"{keyword} → {warning}")
         else:
-            st.markdown(
-                '<span class="badge-success">✓ No risky ingredients found</span>',
-                unsafe_allow_html=True
-            )
+            st.success("No risky ingredients found")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        # ───────── ALTERNATIVES
+        st.subheader("🥗 Alternatives")
 
-        # ─────────────────────────────────────────
-        # ALTERNATIVES
-        # ─────────────────────────────────────────
-        st.markdown(
-            '<p class="section-title">🥗 Healthier Alternatives</p>',
-            unsafe_allow_html=True
-        )
-
-        shown_alternatives = False
+        shown = False
 
         for category, triggers in trigger_map.items():
-
-            if any(trigger in text_lower for trigger in triggers):
-
-                st.markdown(
-                    '<div class="result-box">',
-                    unsafe_allow_html=True
-                )
-
-                st.markdown(
-                    f"<b>Better alternatives to {category}:</b>",
-                    unsafe_allow_html=True
-                )
-
+            if any(t in text_clean for t in triggers):
+                st.info(f"Better than {category}:")
                 for item in alternatives[category]:
-                    st.markdown(
-                        f'<div class="alt-item">✓ {item}</div>',
-                        unsafe_allow_html=True
-                    )
+                    st.write(f"✓ {item}")
+                shown = True
 
-                st.markdown('</div>', unsafe_allow_html=True)
+        if not shown:
+            st.write("No specific alternatives")
 
-                shown_alternatives = True
+        # ───────── CONFIDENCE (NEW)
+        with st.expander("🔍 OCR Confidence Details"):
+            for _, text, conf in results:
+                st.write(f"{text} ({round(conf, 2)})")
 
-        if not shown_alternatives:
-            st.markdown(
-                """
-                <div class="result-box">
-                    No specific alternatives suggested.
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        # ─────────────────────────────────────────
-        # REPORT DOWNLOAD
-        # ─────────────────────────────────────────
-        st.markdown(
-            '<p class="section-title">📥 Download Report</p>',
-            unsafe_allow_html=True
-        )
-
+        # ───────── REPORT
         report = f"""
-FOOD LABEL ANALYSIS REPORT
-========================================
+FOOD LABEL REPORT
+====================
 
-RECOGNIZED TEXT:
+TEXT:
 {extracted_text}
 
-----------------------------------------
-HARMFUL E-NUMBERS:
+E-NUMBERS:
+{found_e if found_e else "None"}
+
+WARNINGS:
+{found_keywords if found_keywords else "None"}
 """
 
-        if found_e:
-            for code, desc in found_e:
-                report += f"\n{code} — {desc}"
-        else:
-            report += "\nNone detected."
-
-        report += "\n\n----------------------------------------\n"
-        report += "INGREDIENT WARNINGS:\n"
-
-        if found_keywords:
-            for keyword, warning in found_keywords:
-                report += f"\n{keyword} — {warning}"
-        else:
-            report += "\nNone detected."
-
         st.download_button(
-            label="⬇️ Download TXT Report",
-            data=report,
-            file_name="food_label_report.txt",
-            mime="text/plain"
+            "Download Report",
+            report,
+            file_name="report.txt"
         )
 
     except Exception as e:
-
-        st.error("❌ Error processing image")
+        st.error("Error processing image")
         st.exception(e)
-
-# ─────────────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────────────
-st.markdown(
-    """
-    <div class="footer">
-        Food Chemistry + AI · Streamlit · EasyOCR
-    </div>
-    """,
-    unsafe_allow_html=True
-)
